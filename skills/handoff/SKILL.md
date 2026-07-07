@@ -69,7 +69,11 @@ knowing where things stand.
      append `-2`, `-3`, … if the name collides.
    - If `claude_mem` is `true` and the claude-mem tools are available, record a
      concise high-signal observation (title = the task; body = goal + current
-     state + next steps) so it's searchable across sessions.
+     state + next steps) so it's searchable across sessions. Note: claude-mem's
+     manual-write tools (`observation_add`/`memory_add`) require its `server-beta`
+     runtime. In `worker` mode they return an error and claude-mem already
+     auto-captures the session, so skip the manual write and just tell the user
+     it's covered by auto-capture.
 
 5. **Close out.** Tell the user exactly what happened, e.g.:
    > "Handoff written to `./HANDOFF.md` (and archived to the vault + claude-mem).
