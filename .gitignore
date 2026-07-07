@@ -1,0 +1,5 @@
+# local scratch / OS cruft
+.DS_Store
+*.bak.*
+HANDOFF.md
+HANDOFF-*.md
