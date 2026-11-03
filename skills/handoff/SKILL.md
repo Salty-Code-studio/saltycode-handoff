@@ -17,8 +17,15 @@ knowing where things stand.
 
 ## Steps
 
-1. **Locate the target file.** Default to `./HANDOFF.md` in the current working
-   directory. The auto-resume hook reads exactly `HANDOFF.md`, so the canonical
+0. **Auto mode exists.** A `SessionEnd` hook (`auto-handoff.py`) already writes
+   a handoff automatically on every `/clear`, into the project the session
+   worked on. Run this skill manually only when the user wants to review the
+   handoff before clearing. A manual handoff written <15 min before `/clear`
+   is kept; the auto one is skipped.
+
+1. **Locate the target file.** Write `HANDOFF.md` into the **project root the
+   session actually worked on** (git root of the files edited), not the shell
+   cwd, which is often `~`. Fall back to the cwd only if no project was touched. The auto-resume hook reads exactly `HANDOFF.md`, so the canonical
    file must keep that name. If a `HANDOFF.md` already exists for *different*
    work, ask whether to overwrite it or save a timestamped copy
    (`HANDOFF-YYYY-MM-DD-HHMM.md`) alongside a refreshed `HANDOFF.md`.
@@ -81,7 +88,11 @@ knowing where things stand.
    > the resume prompt manually."
 
 ## Notes
-- The `HANDOFF.md` filename is load-bearing: the SessionStart auto-resume hook
-  reads exactly `./HANDOFF.md` in the working directory.
+- The `HANDOFF.md` filename is load-bearing. After `/clear`, the SessionStart
+  hook points the new session at the project file the auto-handoff is writing.
+- Auto-handoff tuning: `HANDOFF_AUTOGEN=0` disables it,
+  `HANDOFF_AUTOGEN_REASONS=clear,prompt_input_exit` also runs it on exit,
+  `HANDOFF_AUTOGEN_MODEL` (default sonnet), log at
+  `~/.claude/hooks/saltycode-handoff/auto-handoff.log`.
 - This skill only writes files and (optionally) calls archive tools. It never
   runs `/clear` — that stays the user's decision.

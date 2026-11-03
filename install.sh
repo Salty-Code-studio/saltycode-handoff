@@ -13,7 +13,11 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 echo "saltycode-handoff installer"
 echo "  Claude dir: $CLAUDE_DIR"
 
-# 0. dependency
+# 0. dependencies
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 is required for auto-handoff on /clear." >&2
+  exit 1
+fi
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required. Install it first (macOS: brew install jq)." >&2
   exit 1
@@ -33,21 +37,24 @@ fi
 mkdir -p "$HOOK_DIR"
 cp "$REPO/hooks/context-watch.sh"  "$HOOK_DIR/context-watch.sh"
 cp "$REPO/hooks/session-resume.sh" "$HOOK_DIR/session-resume.sh"
-chmod +x "$HOOK_DIR"/*.sh
+cp "$REPO/hooks/auto-handoff.py"   "$HOOK_DIR/auto-handoff.py"
+chmod +x "$HOOK_DIR"/*.sh "$HOOK_DIR/auto-handoff.py"
 echo "  ✓ hooks      -> $HOOK_DIR"
 
 # 3. settings.json (backup + jq merge, idempotent, non-clobbering)
 CW="$HOOK_DIR/context-watch.sh"
 SR="$HOOK_DIR/session-resume.sh"
+AH="python3 -I $HOOK_DIR/auto-handoff.py"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
 cp "$SETTINGS" "$SETTINGS.bak.$(date +%s)"
 
 tmp="$(mktemp)"
-jq --arg cw "$CW" --arg sr "$SR" '
+jq --arg cw "$CW" --arg sr "$SR" --arg ah "$AH" '
   .hooks = (.hooks // {})
   | .hooks.Stop         = (((.hooks.Stop         // []) | map(select(any(.hooks[]?; .command == $cw) | not))) + [ {hooks:[{type:"command", command:$cw, timeout:10}]} ])
   | .hooks.PreCompact   = (((.hooks.PreCompact   // []) | map(select(any(.hooks[]?; .command == $cw) | not))) + [ {matcher:"auto", hooks:[{type:"command", command:$cw, timeout:10}]} ])
   | .hooks.SessionStart = (((.hooks.SessionStart // []) | map(select(any(.hooks[]?; .command == $sr) | not))) + [ {hooks:[{type:"command", command:$sr, timeout:10}]} ])
+  | .hooks.SessionEnd   = (((.hooks.SessionEnd   // []) | map(select(any(.hooks[]?; .command == $ah) | not))) + [ {hooks:[{type:"command", command:$ah, timeout:15}]} ])
 ' "$SETTINGS" > "$tmp"
 
 if jq -e . "$tmp" >/dev/null 2>&1; then
@@ -61,4 +68,4 @@ fi
 
 echo ""
 echo "Done. Start a new session (or /clear) for the hooks to load."
-echo "Tune anytime with env vars (see README): HANDOFF_GENTLE, HANDOFF_AUTORESUME, ..."
+echo "Tune anytime with env vars (see README): HANDOFF_GENTLE, HANDOFF_AUTORESUME, HANDOFF_AUTOGEN, ..."

@@ -10,20 +10,23 @@ HOOK_DIR="$CLAUDE_DIR/hooks/saltycode-handoff"
 SETTINGS="$CLAUDE_DIR/settings.json"
 CW="$HOOK_DIR/context-watch.sh"
 SR="$HOOK_DIR/session-resume.sh"
+AH="python3 -I $HOOK_DIR/auto-handoff.py"
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required." >&2; exit 1; }
 
 if [ -f "$SETTINGS" ]; then
   cp "$SETTINGS" "$SETTINGS.bak.$(date +%s)"
   tmp="$(mktemp)"
-  jq --arg cw "$CW" --arg sr "$SR" '
+  jq --arg cw "$CW" --arg sr "$SR" --arg ah "$AH" '
     if .hooks then
         .hooks.Stop         = ((.hooks.Stop         // []) | map(select(any(.hooks[]?; .command == $cw) | not)))
       | .hooks.PreCompact   = ((.hooks.PreCompact   // []) | map(select(any(.hooks[]?; .command == $cw) | not)))
       | .hooks.SessionStart = ((.hooks.SessionStart // []) | map(select(any(.hooks[]?; .command == $sr) | not)))
+      | .hooks.SessionEnd   = ((.hooks.SessionEnd   // []) | map(select(any(.hooks[]?; .command == $ah) | not)))
       | (if (.hooks.Stop         | length) == 0 then del(.hooks.Stop)         else . end)
       | (if (.hooks.PreCompact   | length) == 0 then del(.hooks.PreCompact)   else . end)
       | (if (.hooks.SessionStart | length) == 0 then del(.hooks.SessionStart) else . end)
+      | (if (.hooks.SessionEnd   | length) == 0 then del(.hooks.SessionEnd)   else . end)
       | (if (.hooks | length) == 0 then del(.hooks) else . end)
     else . end
   ' "$SETTINGS" > "$tmp"

@@ -9,16 +9,18 @@ clean `HANDOFF.md`, and then **auto-loads that handoff into the fresh session
 after you `/clear`** — so resetting costs you nothing but saves you tokens.
 
 ```
-context grows ──▶ hook nudges you ──▶ /handoff (writes HANDOFF.md)
+context grows ──▶ hook nudges you ──▶ /clear
                                             │
-                                   /clear ──┘
+              SessionEnd hook writes HANDOFF.md into your project
                                             │
-                        SessionStart hook auto-loads HANDOFF.md
+                        new session points at it, say "resume"
                                             │
                         new session resumes, tiny context, full memory
 ```
 
-One skill + three hooks. No dependencies except [`jq`](https://jqlang.github.io/jq/).
+One skill + four hooks. Needs [`jq`](https://jqlang.github.io/jq/) and `python3`.
+
+You don't even have to run `/handoff`. Just type `/clear` and the handoff writes itself.
 
 ---
 
@@ -29,6 +31,7 @@ One skill + three hooks. No dependencies except [`jq`](https://jqlang.github.io/
 | **`context-watch.sh`** | `Stop` (every turn) | Nudges you at **150k / 250k / 400k** tokens. De-duped: once per tier per session, not every turn. |
 | **`context-watch.sh`** | `PreCompact` / `auto` | Last-call alert right before auto-compaction kicks in. |
 | **`session-resume.sh`** | `SessionStart` | After `/clear` with a fresh `HANDOFF.md` → auto-loads it. Cold start → one-line "resume?" note. |
+| **`auto-handoff.py`** | `SessionEnd` on `/clear` | Finds the project you actually worked on (git root of the files you edited, not the folder you launched from), then a headless `claude -p` writes `HANDOFF.md` there in the background. `/clear` never waits. Keeps it out of git via `.git/info/exclude`. |
 | **`/handoff` skill** | you invoke it | Claude synthesizes a structured `HANDOFF.md` (state, next steps, key files, decisions, resume prompt). Optional: archive to Obsidian + claude-mem. |
 
 The nudge measures your true context size by summing `input + cache_read +
@@ -69,6 +72,14 @@ defaults; every one is optional.
 | `HANDOFF_AUTORESUME` | `1` | set `0` to disable auto-loading after `/clear` |
 | `HANDOFF_RESUME_MAXAGE` | `3600` | how fresh (seconds) `HANDOFF.md` must be to auto-load |
 | `HANDOFF_NOTE_MAXAGE` | `604800` | older than this (7d) → stay silent on cold start |
+| `HANDOFF_AUTOGEN` | `1` | set `0` to turn off auto-handoff on `/clear` |
+| `HANDOFF_AUTOGEN_MODEL` | `sonnet` | model that writes the auto-handoff (`haiku` is cheaper) |
+| `HANDOFF_AUTOGEN_MIN_PROMPTS` | `2` | skip sessions shorter than this |
+| `HANDOFF_AUTOGEN_REASONS` | `clear` | SessionEnd reasons that trigger it, e.g. `clear,prompt_input_exit` to also run on exit |
+
+Auto-handoff skips a project if you wrote a `/handoff` there in the last 15
+minutes, so a reviewed manual handoff always wins. It takes about a minute and
+uses one headless Claude call. Log: `~/.claude/hooks/saltycode-handoff/auto-handoff.log`.
 
 Want it eager for maximum savings? `export HANDOFF_GENTLE=60000
 HANDOFF_RECOMMEND=120000 HANDOFF_URGENT=200000`.
@@ -85,7 +96,7 @@ handoff:
 }
 ```
 
-- **`obsidian_vault`** — the `/handoff` skill also writes a timestamped note to
+- **`obsidian_vault`**: the `/handoff` skill and auto-handoff also write a timestamped note to
   `<vault>/Claude Chats/Handoffs/`, with frontmatter + wikilinks.
 - **`claude_mem`** — records a searchable claude-mem observation for the handoff
   (requires the [claude-mem](https://github.com/thedotmack/claude-mem) plugin).

@@ -26,6 +26,19 @@ cwd="$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)"
 source="$(printf '%s' "$input" | jq -r '.source // empty' 2>/dev/null)"
 [ -n "$cwd" ] || cwd="$PWD"
 
+# --- auto-handoff (SessionEnd on /clear) leaves a pointer to the project it wrote to ---
+if [ "$source" = "clear" ]; then
+  ptr="$STATE_DIR/pending_$(printf '%s' "$cwd" | tr -c 'A-Za-z0-9' '_').json"
+  sleep 1  # SessionEnd may still be writing the pointer
+  if [ -f "$ptr" ] && [ $(( $(date +%s) - $(stat -c %Y "$ptr" 2>/dev/null || stat -f %m "$ptr" 2>/dev/null || echo 0) )) -lt 120 ]; then
+    target="$(jq -r '.target // empty' "$ptr" 2>/dev/null)"
+    title="$(jq -r '.title // "previous session"' "$ptr" 2>/dev/null)"
+    jq -n --arg t "$target" --arg c "📋 saltycode-handoff: the previous session (\"${title}\") is being auto-summarised into ${target} in the background (ready in about a minute). Do not read it now. When the user says \"resume\" or asks to continue, read that file and pick up from its Next steps." \
+      '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c},systemMessage:("📋 Handoff being written to " + $t + ". Say \"resume\" to continue.")}'
+    exit 0
+  fi
+fi
+
 file="$cwd/HANDOFF.md"
 [ -f "$file" ] || exit 0
 
